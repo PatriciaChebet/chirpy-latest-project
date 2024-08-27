@@ -6,6 +6,8 @@ import ("log"
 "encoding/json"
 "strings"
 "github.com/PatriciaChebet/chirpy-latest-project/database"
+"sort"
+"errors"
 )
 
 type apiConfig struct {
@@ -77,37 +79,19 @@ func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
 	})
 }
 
-func validate_chirp(w http.ResponseWriter, r *http.Request){
-	type chirp struct {
-		Body string `json:"body"`
-	}
-
-	type validatedChirp struct {
-		Id int `json:"id"`
-		CleanedBody string `json:"cleaned_body"`
-	}
-
-	decoder := json.NewDecoder(r.Body)
-	params := chirp{}
-	err := decoder.Decode(&params)
-	if err != nil {
-		respondWithError(w, http.StatusBadRequest, "Couldn't decode parameters")
-		return
-	}
-
+func validate_chirp(body string) (string, error) {
 	const maxChirpLength = 140
-	
-	if len(params.Body) > maxChirpLength {
-		respondWithError(w, http.StatusBadRequest, "Chirp is too long")
-		return
+	if len(body) > maxChirpLength {
+		return "", errors.New("Chirp is too long")
 	}
 
-	var replacedParam = strings.NewReplacer("kerfuffle", "****",
-	"Kerfuffle", "****", "sharbert", "****", "Sharbert", "****", "fornax", "****", "Fornax", "****").Replace(params.Body)
-
-	respondWithJSON(w, http.StatusOK, validatedChirp{
-		CleanedBody: replacedParam,
-	})
+	badWords := map[string]struct{}{
+		"kerfuffle": {},
+		"sharbert":  {},
+		"fornax":    {},
+	}
+	cleaned := getCleanedBody(body, badWords)
+	return cleaned, nil
 }
 
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}){
@@ -134,7 +118,7 @@ func respondWithError(w http.ResponseWriter, code int, message string){
 	respondWithJSON(w, code, errorResponse{Error: message})
 }
 
-func(cfg *apiConfig) handleChirpsCreate(w http.ResponseWriter, r *http.Request){
+func(cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request){
 	type parameters struct {
 		Body string `json:"body"`
 	}
@@ -147,7 +131,7 @@ func(cfg *apiConfig) handleChirpsCreate(w http.ResponseWriter, r *http.Request){
 		return
 	}
 
-	cleaned, err := validatedChirp(params.Body)
+	cleaned, err := validate_chirp(params.Body)
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, err.Error())
 		return
@@ -174,7 +158,7 @@ func(cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Reques
 
 	chirps := []Chirp{}
 	for _, dbChirp := range dbChirps{
-		chirps = append(chrips, Chirp{
+		chirps = append(chirps, Chirp{
 			ID: dbChirp.ID,
 			Body: dbChirp.Body,
 		})
@@ -186,5 +170,17 @@ func(cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Reques
 
 	respondWithJSON(w, http.StatusOK, chirps)
 
+}
+
+func getCleanedBody(body string, badWords map[string]struct{}) string {
+	words := strings.Split(body, " ")
+	for i, word := range words {
+		loweredWord := strings.ToLower(word)
+		if _, ok := badWords[loweredWord]; ok {
+			words[i] = "****"
+		}
+	}
+	cleaned := strings.Join(words, " ")
+	return cleaned
 }
 
