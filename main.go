@@ -8,6 +8,7 @@ import ("log"
 "github.com/PatriciaChebet/chirpy-latest-project/database"
 "sort"
 "errors"
+"strconv"
 )
 
 type apiConfig struct {
@@ -42,6 +43,7 @@ func main(){
 	mux.HandleFunc("GET /api/reset", apiCfg.resetServerHits)
 	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirpsCreate)
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerChirpsRetrieve)
+	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.handleChirpRetrieval)
 
 	srv := &http.Server{
 		Addr: ":" + port,
@@ -171,6 +173,25 @@ func(cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Reques
 	respondWithJSON(w, http.StatusOK, chirps)
 
 }
+func(cfg *apiConfig) handleChirpRetrieval(w http.ResponseWriter, r *http.Request){
+	chirpId := r.PathValue("id")
+	chirpID , err := strconv.Atoi(chirpId)
+	if err != nil{
+		respondWithError(w, http.StatusInternalServerError, "Mismatch of types")
+		return
+	}
+
+	dbChirp, err := cfg.DB.GetChirp(chirpID)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "Couldn't get chirp")
+		return
+	}
+
+	respondWithJSON(w, http.StatusOK, Chirp{
+		ID:   dbChirp.ID,
+		Body: dbChirp.Body,
+	})
+}
 
 func getCleanedBody(body string, badWords map[string]struct{}) string {
 	words := strings.Split(body, " ")
@@ -183,4 +204,5 @@ func getCleanedBody(body string, badWords map[string]struct{}) string {
 	cleaned := strings.Join(words, " ")
 	return cleaned
 }
+
 
