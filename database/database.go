@@ -25,8 +25,8 @@ type Chirp struct {
 }
 
 type User struct {
-	ID   int    `json:"id"`
-	Body string `json:"body"`
+	ID    int    `json:"id"`
+	Email string `json:"email"`
 }
 
 func NewDB(path string) (*DB, error) {
@@ -59,7 +59,7 @@ func (db *DB) CreateChirp(body string) (Chirp, error) {
 	return chirp, nil
 }
 
-func (db *DB) CreateUser(body string) (User, error) {
+func (db *DB) CreateUser(email string) (User, error) {
 	dbStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
@@ -67,8 +67,8 @@ func (db *DB) CreateUser(body string) (User, error) {
 
 	id := len(dbStructure.Users) + 1
 	user := User{
-		ID:   id,
-		Body: body,
+		ID:    id,
+		Email: email,
 	}
 	dbStructure.Users[id] = user
 
