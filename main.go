@@ -1,27 +1,34 @@
 package main
 
-import ("log"
-"net/http"
-"fmt"
-"encoding/json"
-"strings"
-"github.com/PatriciaChebet/chirpy-latest-project/database"
-"sort"
-"errors"
-"strconv"
+import (
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log"
+	"net/http"
+	"sort"
+	"strconv"
+	"strings"
+
+	"github.com/PatriciaChebet/chirpy-latest-project/database"
 )
 
 type apiConfig struct {
 	fileserveHits int
-	DB *database.DB
+	DB            *database.DB
 }
 
 type Chirp struct {
-	ID int `json:"id"`
+	ID   int    `json:"id"`
 	Body string `json:"body"`
 }
 
-func main(){
+type User struct {
+	ID   int    `json:"id"`
+	Body string `json:"body"`
+}
+
+func main() {
 	const filepathRoot = "."
 	const port = "8080"
 
@@ -29,10 +36,10 @@ func main(){
 	if err != nil {
 		log.Fatal(err)
 	}
-	
+
 	apiCfg := apiConfig{
 		fileserveHits: 0,
-		DB: db,
+		DB:            db,
 	}
 
 	mux := http.NewServeMux()
@@ -44,9 +51,10 @@ func main(){
 	mux.HandleFunc("POST /api/chirps", apiCfg.handlerChirpsCreate)
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerChirpsRetrieve)
 	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.handleChirpRetrieval)
+	mux.Handle("POST /api/users", apiCfg.handleUsersCreate)
 
 	srv := &http.Server{
-		Addr: ":" + port,
+		Addr:    ":" + port,
 		Handler: mux,
 	}
 
@@ -54,20 +62,20 @@ func main(){
 	log.Fatal(srv.ListenAndServe())
 }
 
-func calcHealthz(w http.ResponseWriter, r *http.Request){
+func calcHealthz(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("OK"))
 }
 
-func (cfg *apiConfig) calcServerHits(w http.ResponseWriter, r *http.Request){
+func (cfg *apiConfig) calcServerHits(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
 	w.Write([]byte("<h1>Welcome, Chirpy Admin</h1>"))
 	w.Write([]byte(fmt.Sprintf("Chirpy has been visited %d times!", cfg.fileserveHits)))
 }
 
-func (cfg *apiConfig) resetServerHits(w http.ResponseWriter, r *http.Request){
+func (cfg *apiConfig) resetServerHits(w http.ResponseWriter, r *http.Request) {
 	cfg.fileserveHits = 0
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 	w.WriteHeader(http.StatusOK)
@@ -75,7 +83,7 @@ func (cfg *apiConfig) resetServerHits(w http.ResponseWriter, r *http.Request){
 }
 
 func (cfg *apiConfig) middlewareMetricsInc(next http.Handler) http.Handler {
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request){
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		cfg.fileserveHits++
 		next.ServeHTTP(w, r)
 	})
@@ -96,7 +104,7 @@ func validate_chirp(body string) (string, error) {
 	return cleaned, nil
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}){
+func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	response, err := json.Marshal(payload)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't marshal response")
@@ -108,19 +116,19 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}){
 	w.Write(response)
 }
 
-func respondWithError(w http.ResponseWriter, code int, message string){
+func respondWithError(w http.ResponseWriter, code int, message string) {
 	if code > 499 {
 		log.Printf("Responding with error: %s", message)
 	}
 
-	type errorResponse struct {	
+	type errorResponse struct {
 		Error string `json:"error"`
 	}
 
 	respondWithJSON(w, code, errorResponse{Error: message})
 }
 
-func(cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request){
+func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request) {
 	type parameters struct {
 		Body string `json:"body"`
 	}
@@ -151,7 +159,32 @@ func(cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-func(cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
+	type params struct {
+		Body string `json:"body"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	parameters := params{}
+	err := decoder.Decode(&parameters)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters")
+		return
+	}
+
+	user, err := cfg.DB.createUser(parameters.Body)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, User{
+		ID:   user.ID,
+		Body: user.Body,
+	})
+}
+
+func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
 	dbChirps, err := cfg.DB.GetChirps()
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't retrieve chirps")
@@ -159,24 +192,24 @@ func(cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Reques
 	}
 
 	chirps := []Chirp{}
-	for _, dbChirp := range dbChirps{
+	for _, dbChirp := range dbChirps {
 		chirps = append(chirps, Chirp{
-			ID: dbChirp.ID,
+			ID:   dbChirp.ID,
 			Body: dbChirp.Body,
 		})
 	}
 
-	sort.Slice(chirps, func(i, j int) bool{
+	sort.Slice(chirps, func(i, j int) bool {
 		return chirps[i].ID < chirps[j].ID
 	})
 
 	respondWithJSON(w, http.StatusOK, chirps)
 
 }
-func(cfg *apiConfig) handleChirpRetrieval(w http.ResponseWriter, r *http.Request){
+func (cfg *apiConfig) handleChirpRetrieval(w http.ResponseWriter, r *http.Request) {
 	chirpId := r.PathValue("id")
-	chirpID , err := strconv.Atoi(chirpId)
-	if err != nil{
+	chirpID, err := strconv.Atoi(chirpId)
+	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Mismatch of types")
 		return
 	}
@@ -204,5 +237,3 @@ func getCleanedBody(body string, badWords map[string]struct{}) string {
 	cleaned := strings.Join(words, " ")
 	return cleaned
 }
-
-
