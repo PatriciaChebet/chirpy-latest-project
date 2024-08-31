@@ -82,6 +82,27 @@ func (db *DB) CreateUser(email string, password string) (User, error) {
 	return user, nil
 }
 
+func (db *DB) UpdateUser(id int, email string, password string) (User, error) {
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return User{}, err
+	}
+
+	user := User{
+		ID:       id,
+		Email:    email,
+		Password: password,
+	}
+	dbStructure.Users[id] = user
+
+	err = db.writeDB(dbStructure)
+	if err != nil {
+		return User{}, err
+	}
+
+	return user, nil
+}
+
 func (db *DB) FindUserByEmail(email string) (User, error) {
 	dbStructure, err := db.loadDB()
 	if err != nil {
@@ -90,6 +111,21 @@ func (db *DB) FindUserByEmail(email string) (User, error) {
 
 	for _, user := range dbStructure.Users {
 		if user.Email == email {
+			return user, nil
+		}
+	}
+
+	return User{}, ErrNotExist
+}
+
+func (db *DB) FindUserByID(id int) (User, error) {
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return User{}, err
+	}
+
+	for _, user := range dbStructure.Users {
+		if user.ID == id {
 			return user, nil
 		}
 	}

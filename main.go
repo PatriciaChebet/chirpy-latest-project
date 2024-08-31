@@ -39,6 +39,13 @@ type User struct {
 	Token string `json:"token"`
 }
 
+type JwtToken struct {
+	Issuer    string    `json:"issuer"`
+	IssuedAt  time.Time `json:"issued_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+	Subject   string    `json:"subject"`
+}
+
 func main() {
 	const filepathRoot = "."
 	const port = "8080"
@@ -68,6 +75,7 @@ func main() {
 	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.handleChirpRetrieval)
 	mux.HandleFunc("POST /api/users", apiCfg.handleUsersCreate)
 	mux.HandleFunc("POST /api/login", apiCfg.loginUser)
+	mux.HandleFunc("PUT /api/users", apiCfg.handleUsersUpdate)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -254,6 +262,61 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		ID:    user.ID,
 		Email: user.Email,
 		Token: signedToken,
+	})
+}
+
+func (cfg *apiConfig) handleUsersUpdate(w http.ResponseWriter, r *http.Request) {
+	type params struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	bearerToken := r.Header.Get("Authorization")
+	trimmedToken := strings.TrimPrefix(bearerToken, "Bearer ")
+
+	returnedToken, err := jwt.ParseWithClaims(trimmedToken, &CustomClaims{}, func(trimmedToken *jwt.Token) (interface{}, error) {
+		return []byte(cfg.JWT_SECRET), nil
+	})
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Invalid token")
+	}
+
+	tokenClaims, ok := returnedToken.Claims.(*CustomClaims)
+	if !ok {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't parse token claims")
+		return
+	}
+	tokenStruct := JwtToken{
+		Issuer:    tokenClaims.Issuer,
+		IssuedAt:  tokenClaims.IssuedAt.Time,
+		ExpiresAt: tokenClaims.ExpiresAt.Time,
+		Subject:   tokenClaims.Subject,
+	}
+
+	user, err := cfg.DB.FindUserByID(tokenStruct.Subject)
+
+	decoder := json.NewDecoder(r.Body)
+	parameters := params{}
+	err = decoder.Decode(&parameters)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters")
+		return
+	}
+
+	hashedPassword, err := HashPassword(parameters.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't hash the password")
+	}
+
+	updatedUser, err := cfg.DB.UpdateUser(user.ID, parameters.Email, hashedPassword)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
+		return
+	}
+
+	respondWithJSON(w, http.StatusCreated, User{
+		ID:    updatedUser.ID,
+		Email: updatedUser.Email,
 	})
 }
 

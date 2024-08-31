@@ -22,6 +22,8 @@ github.com/PatriciaChebet/chirpy-latest-project/database v0.11.1 h1:oJ40osm1wlrw
 github.com/PatriciaChebet/chirpy-latest-project/database v0.11.1/go.mod h1:wjku3xpmbkuF5lvTQJ9vBWJ/YSywmxnd6eDzU37Fr3o=
 github.com/PatriciaChebet/chirpy-latest-project/database v0.12.1 h1:yQNi4faIna5D+xcck9W2VgjfnfWCaH+DE/7f//w2Cm4=
 github.com/PatriciaChebet/chirpy-latest-project/database v0.12.1/go.mod h1:wjku3xpmbkuF5lvTQJ9vBWJ/YSywmxnd6eDzU37Fr3o=
+github.com/PatriciaChebet/chirpy-latest-project/database v0.13.1 h1:nN/8zSfudN2+m63tzOYmvjuYG0LTuNJd2D1KWUM2We0=
+github.com/PatriciaChebet/chirpy-latest-project/database v0.13.1/go.mod h1:wjku3xpmbkuF5lvTQJ9vBWJ/YSywmxnd6eDzU37Fr3o=
 github.com/golang-jwt/jwt/v5 v5.2.1 h1:OuVbFODueb089Lh128TAcimifWaLhJwVflnrgM17wHk=
 github.com/golang-jwt/jwt/v5 v5.2.1/go.mod h1:pqrtFR0X4osieyHYxtmOUWsAWrfe1Q5UVIyoH402zdk=
 github.com/joho/godotenv v1.5.1 h1:7eLL/+HRGLY0ldzfGMeQkb7vMd0as4CfYvUVzLqw0N0=
