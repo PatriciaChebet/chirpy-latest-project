@@ -36,6 +36,7 @@ type Chirp struct {
 type User struct {
 	ID    int    `json:"id"`
 	Email string `json:"email"`
+	Token string `json:"token"`
 }
 
 func main() {
@@ -226,6 +227,9 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := cfg.DB.FindUserByEmail(parameters.Email)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Could not find user with that email")
+	}
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(parameters.Password))
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "Passwords did not match")
@@ -241,7 +245,10 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
-	signedToken, err := token.SignedString(cfg.JWT_SECRET)
+	signedToken, err := token.SignedString([]byte(cfg.JWT_SECRET))
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "Token could not be signed")
+	}
 
 	respondWithJSON(w, http.StatusOK, User{
 		ID:    user.ID,
