@@ -53,6 +53,7 @@ func main() {
 	mux.HandleFunc("GET /api/chirps", apiCfg.handlerChirpsRetrieve)
 	mux.HandleFunc("GET /api/chirps/{id}", apiCfg.handleChirpRetrieval)
 	mux.HandleFunc("POST /api/users", apiCfg.handleUsersCreate)
+	mux.HandleFunc("POST /api/login", apiCfg.loginUser)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -196,6 +197,32 @@ func HashPassword(password string) (string, error) {
 	return string(bytes), err
 }
 
+func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
+	type params struct {
+		Email    string `json:"email"`
+		Password string `json:"password"`
+	}
+
+	decoder := json.NewDecoder(r.Body)
+	parameters := params{}
+	err := decoder.Decode(&parameters)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't decode parameters")
+		return
+	}
+
+	user, err := cfg.DB.FindUserByEmail(parameters.Email)
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(parameters.Password))
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Passwords did not match")
+	}
+
+	respondWithJSON(w, http.StatusOK, User{
+		ID:    user.ID,
+		Email: user.Email,
+	})
+}
+
 func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
 	dbChirps, err := cfg.DB.GetChirps()
 	if err != nil {
@@ -218,6 +245,7 @@ func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Reque
 	respondWithJSON(w, http.StatusOK, chirps)
 
 }
+
 func (cfg *apiConfig) handleChirpRetrieval(w http.ResponseWriter, r *http.Request) {
 	chirpId := r.PathValue("id")
 	chirpID, err := strconv.Atoi(chirpId)
