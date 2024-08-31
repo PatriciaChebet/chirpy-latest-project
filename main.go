@@ -243,16 +243,27 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Passwords did not match")
 	}
 
+	var expiresIn int
+	if parameters.ExpiresInSeconds != 0 {
+		if parameters.ExpiresInSeconds < 86400 {
+			expiresIn = parameters.ExpiresInSeconds
+		}
+		expiresIn = 86400
+	} else {
+		expiresIn = 86400 // Default value
+	}
+
 	claims := CustomClaims{
 		jwt.RegisteredClaims{
 			Issuer:    "chirpy",
 			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(parameters.ExpiresInSeconds) * time.Second)),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(expiresIn) * time.Second)),
 			Subject:   strconv.Itoa(user.ID),
 		},
 	}
 
 	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	log.Printf("Expires at %s\n", claims.ExpiresAt)
 	signedToken, err := token.SignedString([]byte(cfg.JWT_SECRET))
 	if err != nil {
 		respondWithError(w, http.StatusBadRequest, "Token could not be signed")
@@ -272,13 +283,18 @@ func (cfg *apiConfig) handleUsersUpdate(w http.ResponseWriter, r *http.Request) 
 	}
 
 	bearerToken := r.Header.Get("Authorization")
+	log.Printf("Bearer token sent %s\n", bearerToken)
 	trimmedToken := strings.TrimPrefix(bearerToken, "Bearer ")
+	log.Printf("trimmedToken %s\n", trimmedToken)
 
 	returnedToken, err := jwt.ParseWithClaims(trimmedToken, &CustomClaims{}, func(trimmedToken *jwt.Token) (interface{}, error) {
 		return []byte(cfg.JWT_SECRET), nil
 	})
+	log.Printf("returnedToken %s\n", returnedToken)
 	if err != nil {
+		log.Printf("Error with Token %s\n", err)
 		respondWithError(w, http.StatusUnauthorized, "Invalid token")
+		return
 	}
 
 	tokenClaims, ok := returnedToken.Claims.(*CustomClaims)
@@ -292,8 +308,14 @@ func (cfg *apiConfig) handleUsersUpdate(w http.ResponseWriter, r *http.Request) 
 		ExpiresAt: tokenClaims.ExpiresAt.Time,
 		Subject:   tokenClaims.Subject,
 	}
+	log.Printf("tokenStruct.Subject %s\n", tokenStruct.Subject)
+	userID, _ := strconv.Atoi(tokenStruct.Subject)
 
-	user, err := cfg.DB.FindUserByID(tokenStruct.Subject)
+	user, err := cfg.DB.FindUserByID(userID)
+	if err != nil {
+		respondWithError(w, http.StatusBadRequest, "User not found")
+		return
+	}
 
 	decoder := json.NewDecoder(r.Body)
 	parameters := params{}
@@ -314,7 +336,7 @@ func (cfg *apiConfig) handleUsersUpdate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	respondWithJSON(w, http.StatusCreated, User{
+	respondWithJSON(w, http.StatusOK, User{
 		ID:    updatedUser.ID,
 		Email: updatedUser.Email,
 	})
