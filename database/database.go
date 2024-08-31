@@ -66,12 +66,6 @@ func (db *DB) CreateUser(email string, password string) (User, error) {
 		return User{}, err
 	}
 
-	for _, user := range dbStructure.Users {
-		if user.Email == email {
-			return User{}, err
-		}
-	}
-
 	id := len(dbStructure.Users) + 1
 	user := User{
 		ID:       id,
