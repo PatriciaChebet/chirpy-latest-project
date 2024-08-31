@@ -2,4 +2,7 @@ module github.com/PatriciaChebet/chirpy-latest-project
 
 go 1.22.6
 
-require github.com/PatriciaChebet/chirpy-latest-project/database v0.7.1 // indirect
+require (
+	github.com/PatriciaChebet/chirpy-latest-project/database v0.8.1 // indirect
+	golang.org/x/crypto v0.26.0 // indirect
+)

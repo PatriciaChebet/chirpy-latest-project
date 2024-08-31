@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/PatriciaChebet/chirpy-latest-project/database"
+	"golang.org/x/crypto/bcrypt"
 )
 
 type apiConfig struct {
@@ -161,7 +162,8 @@ func (cfg *apiConfig) handlerChirpsCreate(w http.ResponseWriter, r *http.Request
 
 func (cfg *apiConfig) handleUsersCreate(w http.ResponseWriter, r *http.Request) {
 	type params struct {
-		Email string `json:"email"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -172,7 +174,12 @@ func (cfg *apiConfig) handleUsersCreate(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	user, err := cfg.DB.CreateUser(parameters.Email)
+	hashedPassword, err := HashPassword(parameters.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't hash the password")
+	}
+
+	user, err := cfg.DB.CreateUser(parameters.Email, hashedPassword)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
 		return
@@ -182,6 +189,11 @@ func (cfg *apiConfig) handleUsersCreate(w http.ResponseWriter, r *http.Request) 
 		ID:    user.ID,
 		Email: user.Email,
 	})
+}
+
+func HashPassword(password string) (string, error) {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password), 14)
+	return string(bytes), err
 }
 
 func (cfg *apiConfig) handlerChirpsRetrieve(w http.ResponseWriter, r *http.Request) {
