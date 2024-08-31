@@ -6,17 +6,26 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/PatriciaChebet/chirpy-latest-project/database"
+	"github.com/golang-jwt/jwt/v5"
+	"github.com/joho/godotenv"
 	"golang.org/x/crypto/bcrypt"
 )
+
+type CustomClaims struct {
+	jwt.RegisteredClaims
+}
 
 type apiConfig struct {
 	fileserveHits int
 	DB            *database.DB
+	JWT_SECRET    string
 }
 
 type Chirp struct {
@@ -33,6 +42,9 @@ func main() {
 	const filepathRoot = "."
 	const port = "8080"
 
+	godotenv.Load()
+	jwtSecret := os.Getenv("JWT_SECRET")
+
 	db, err := database.NewDB("database.json")
 	if err != nil {
 		log.Fatal(err)
@@ -41,6 +53,7 @@ func main() {
 	apiCfg := apiConfig{
 		fileserveHits: 0,
 		DB:            db,
+		JWT_SECRET:    jwtSecret,
 	}
 
 	mux := http.NewServeMux()
@@ -199,8 +212,9 @@ func HashPassword(password string) (string, error) {
 
 func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 	type params struct {
-		Email    string `json:"email"`
-		Password string `json:"password"`
+		Email            string `json:"email"`
+		Password         string `json:"password"`
+		ExpiresInSeconds int    `json:"expires_in_seconds"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -217,9 +231,22 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Passwords did not match")
 	}
 
+	claims := CustomClaims{
+		jwt.RegisteredClaims{
+			Issuer:    "chirpy",
+			IssuedAt:  jwt.NewNumericDate(time.Now().UTC()),
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(time.Duration(parameters.ExpiresInSeconds) * time.Second)),
+			Subject:   strconv.Itoa(user.ID),
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString(cfg.JWT_SECRET)
+
 	respondWithJSON(w, http.StatusOK, User{
 		ID:    user.ID,
 		Email: user.Email,
+		Token: signedToken,
 	})
 }
 
