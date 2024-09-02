@@ -1,6 +1,8 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -221,9 +223,8 @@ func HashPassword(password string) (string, error) {
 
 func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 	type params struct {
-		Email            string `json:"email"`
-		Password         string `json:"password"`
-		ExpiresInSeconds int    `json:"expires_in_seconds"`
+		Email    string `json:"email"`
+		Password string `json:"password"`
 	}
 
 	decoder := json.NewDecoder(r.Body)
@@ -243,15 +244,7 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "Passwords did not match")
 	}
 
-	var expiresIn int
-	if parameters.ExpiresInSeconds != 0 {
-		if parameters.ExpiresInSeconds < 86400 {
-			expiresIn = parameters.ExpiresInSeconds
-		}
-		expiresIn = 86400
-	} else {
-		expiresIn = 86400 // Default value
-	}
+	expiresIn := 3600 // Default value
 
 	claims := CustomClaims{
 		jwt.RegisteredClaims{
@@ -269,10 +262,34 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Token could not be signed")
 	}
 
+	daysInSeconds := 60 * 86400
+	expirationDate := time.Now().Add(time.Duration(daysInSeconds) * time.Second)
+
+	refreshToken := make([]byte, 32)
+	_, err = rand.Read(refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't generate refresh token")
+		return
+	}
+
+	hexRefreshToken := hex.EncodeToString(refreshToken)
+
+	hashedPassword, err := HashPassword(parameters.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't hash the password")
+	}
+
+	loggedInUser, err := cfg.DB.UpdateUser(user.ID, parameters.Email, hashedPassword, hexRefreshToken, expirationDate)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
+		return
+	}
+
 	respondWithJSON(w, http.StatusOK, User{
-		ID:    user.ID,
-		Email: user.Email,
-		Token: signedToken,
+		ID:           user.ID,
+		Email:        user.Email,
+		Token:        signedToken,
+		RefreshToken: loggedInUser.RefreshToken,
 	})
 }
 

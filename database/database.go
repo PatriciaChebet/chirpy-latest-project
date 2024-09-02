@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"sync"
+	"time"
 )
 
 var ErrNotExist = errors.New("resource does not exist")
@@ -25,9 +26,11 @@ type Chirp struct {
 }
 
 type User struct {
-	ID       int    `json:"id"`
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	ID             int       `json:"id"`
+	Email          string    `json:"email"`
+	Password       string    `json:"password"`
+	RefreshToken   string    `json:"refresh_token"`
+	ExpirationDate time.Time `json:"expiration_date"`
 }
 
 func NewDB(path string) (*DB, error) {
@@ -82,16 +85,18 @@ func (db *DB) CreateUser(email string, password string) (User, error) {
 	return user, nil
 }
 
-func (db *DB) UpdateUser(id int, email string, password string) (User, error) {
+func (db *DB) UpdateUser(id int, email string, password string, refreshToken string, expirationDate time.Time) (User, error) {
 	dbStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
 	}
 
 	user := User{
-		ID:       id,
-		Email:    email,
-		Password: password,
+		ID:             id,
+		Email:          email,
+		Password:       password,
+		RefreshToken:   refreshToken,
+		ExpirationDate: expirationDate,
 	}
 	dbStructure.Users[id] = user
 
