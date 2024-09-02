@@ -31,6 +31,7 @@ type User struct {
 	Password       string    `json:"password"`
 	RefreshToken   string    `json:"refresh_token"`
 	ExpirationDate time.Time `json:"expiration_date"`
+	Token          string    `json:"token"`
 }
 
 func NewDB(path string) (*DB, error) {
@@ -85,7 +86,7 @@ func (db *DB) CreateUser(email string, password string) (User, error) {
 	return user, nil
 }
 
-func (db *DB) UpdateUser(id int, email string, password string, refreshToken string, expirationDate time.Time) (User, error) {
+func (db *DB) UpdateUser(id int, email string, password string, refreshToken string, expirationDate time.Time, accessToken string) (User, error) {
 	dbStructure, err := db.loadDB()
 	if err != nil {
 		return User{}, err
@@ -97,6 +98,7 @@ func (db *DB) UpdateUser(id int, email string, password string, refreshToken str
 		Password:       password,
 		RefreshToken:   refreshToken,
 		ExpirationDate: expirationDate,
+		Token:          accessToken,
 	}
 	dbStructure.Users[id] = user
 
@@ -131,6 +133,21 @@ func (db *DB) FindUserByID(id int) (User, error) {
 
 	for _, user := range dbStructure.Users {
 		if user.ID == id {
+			return user, nil
+		}
+	}
+
+	return User{}, ErrNotExist
+}
+
+func (db *DB) FindUserByToken(accessToken string) (User, error) {
+	dbStructure, err := db.loadDB()
+	if err != nil {
+		return User{}, err
+	}
+
+	for _, user := range dbStructure.Users {
+		if user.Token == accessToken {
 			return user, nil
 		}
 	}

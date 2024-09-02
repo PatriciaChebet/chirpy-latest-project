@@ -36,9 +36,11 @@ type Chirp struct {
 }
 
 type User struct {
-	ID    int    `json:"id"`
-	Email string `json:"email"`
-	Token string `json:"token"`
+	ID             int       `json:"id"`
+	Email          string    `json:"email"`
+	Token          string    `json:"token"`
+	RefreshToken   string    `json:"refresh_token"`
+	ExpirationDate time.Time `json:"expiration_date"`
 }
 
 type JwtToken struct {
@@ -78,6 +80,8 @@ func main() {
 	mux.HandleFunc("POST /api/users", apiCfg.handleUsersCreate)
 	mux.HandleFunc("POST /api/login", apiCfg.loginUser)
 	mux.HandleFunc("PUT /api/users", apiCfg.handleUsersUpdate)
+	mux.HandleFunc("POST /api/refresh", apiCfg.handleTokenRefresh)
+	mux.HandleFunc("POST /api/revoke", apiCfg.handleTokenRevoke)
 
 	srv := &http.Server{
 		Addr:    ":" + port,
@@ -279,7 +283,7 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't hash the password")
 	}
 
-	loggedInUser, err := cfg.DB.UpdateUser(user.ID, parameters.Email, hashedPassword, hexRefreshToken, expirationDate)
+	loggedInUser, err := cfg.DB.UpdateUser(user.ID, parameters.Email, hashedPassword, hexRefreshToken, expirationDate, signedToken)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
 		return
@@ -291,6 +295,39 @@ func (cfg *apiConfig) loginUser(w http.ResponseWriter, r *http.Request) {
 		Token:        signedToken,
 		RefreshToken: loggedInUser.RefreshToken,
 	})
+}
+
+func (cfg *apiConfig) handleTokenRefresh(w http.ResponseWriter, r *http.Request) {
+	bearerToken := r.Header.Get("Authorization")
+	trimmedToken := strings.TrimPrefix(bearerToken, "Bearer ")
+
+	user, err := cfg.DB.FindUserByToken(trimmedToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Could not find user with that token")
+	}
+
+	respondWithJSON(w, http.StatusOK, User{
+		Token: user.Token,
+	})
+}
+
+func (cfg *apiConfig) handleTokenRevoke(w http.ResponseWriter, r *http.Request) {
+	bearerToken := r.Header.Get("Authorization")
+	trimmedToken := strings.TrimPrefix(bearerToken, "Bearer ")
+
+	user, err := cfg.DB.FindUserByToken(trimmedToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "Could not find user with that token")
+	}
+
+	revokedUser, err := cfg.DB.UpdateUser(user.ID, user.Email, user.Password, user.RefreshToken, user.ExpirationDate, "")
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "Couldn't not revoke user's token")
+		return
+	}
+
+	respondWithJSON(w, http.StatusNonAuthoritativeInfo, User{})
+
 }
 
 func (cfg *apiConfig) handleUsersUpdate(w http.ResponseWriter, r *http.Request) {
@@ -347,7 +384,7 @@ func (cfg *apiConfig) handleUsersUpdate(w http.ResponseWriter, r *http.Request) 
 		respondWithError(w, http.StatusInternalServerError, "Couldn't hash the password")
 	}
 
-	updatedUser, err := cfg.DB.UpdateUser(user.ID, parameters.Email, hashedPassword)
+	updatedUser, err := cfg.DB.UpdateUser(user.ID, parameters.Email, hashedPassword, "", time.Now())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "Couldn't create user")
 		return
